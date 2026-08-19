@@ -50,7 +50,25 @@ PostgreSQL `DATABASE_URL`.
 
 ## Deploying (e.g. Render)
 
-2. Set the environment variables from `.env` in your Render service
+The repository includes a root-level `render.yaml` Blueprint. In Render,
+choose **New > Blueprint** and select this repository. It provisions the
+`careerforge-api` web service and a PostgreSQL database, then installs the
+backend from `backend/`.
+
+After the Blueprint is created, set these prompted environment variables in
+the Render dashboard:
+
+- `ALLOWED_ORIGINS`: your deployed frontend origin, such as
+  `https://careerforge.vercel.app`
+- `FRONTEND_URL`: the same frontend URL
+- `PAYSTACK_SECRET_KEY`: your Paystack secret key
+- `OPENAI_API_KEY`: your OpenRouter/OpenAI provider key
+
+The Blueprint sets the backend start command to
+`uvicorn app.main:app --host 0.0.0.0 --port $PORT` and connects
+`DATABASE_URL` to the provisioned PostgreSQL database.
+
+For a manual Render service, set the environment variables from `.env` in your Render service
   settings — especially `DATABASE_URL` (point it at your Postgres instance),
   `JWT_SECRET`, `PAYSTACK_SECRET_KEY`, `FRONTEND_URL`, and
   `APPLICATION_FEE_KOBO`.
