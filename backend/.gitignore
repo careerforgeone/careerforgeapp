@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+venv/
+.env
+careerforge.db
+app/uploads/resumes/*
+!app/uploads/resumes/.gitkeep
