@@ -1,6 +1,6 @@
 __pycache__/
 *.pyc
-venv/
+venv
 .env
 careerforge.db
 app/uploads/resumes/*
