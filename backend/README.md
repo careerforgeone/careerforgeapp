@@ -28,7 +28,7 @@ app/
     partner.py                # POST /api/partner
     admin.py                   # GET /api/admin/stats, /api/admin/applicants (admin-only)
   bot/
-    chat.py                     # STUB — reserved space for your chatbot, see below
+    chat.py                     # grounded RAG chatbot endpoint
   uploads/
     resumes/                      # uploaded CV files land here on the server
 ```
@@ -44,15 +44,16 @@ cp .env.example .env            # then edit .env as needed
 uvicorn app.main:app --reload --port 8000
 ```
 
-The API will be at `http://localhost:8000`. SQLite is used by default —
-a `careerforge.db` file appears in this folder, no database setup needed
-for local dev.
+The API will be at `http://localhost:8000`. PostgreSQL is the configured
+database; create the `careerforge` database locally or provide a hosted
+PostgreSQL `DATABASE_URL`.
 
 ## Deploying (e.g. Render)
 
-1. Set the environment variables from `.env.example` in your Render
-   service settings — especially `DATABASE_URL` (point it at your
-   Postgres instance) and `JWT_SECRET`.
+2. Set the environment variables from `.env` in your Render service
+  settings — especially `DATABASE_URL` (point it at your Postgres instance),
+  `JWT_SECRET`, `PAYSTACK_SECRET_KEY`, `FRONTEND_URL`, and
+  `APPLICATION_FEE_KOBO`.
 2. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 3. Make sure `ALLOWED_ORIGINS` includes your actual deployed frontend URL,
    or the browser will block requests with a CORS error.
@@ -70,7 +71,8 @@ or another persistent object store, and store the returned URL in
 |--------|-----------------------|----------------|-------|
 | POST   | `/api/auth/register`  | no             | Creates a user, returns `{user, token}` |
 | POST   | `/api/auth/login`     | no             | Returns `{user, token}` |
-| POST   | `/api/apply`          | no             | multipart/form-data — `cv` file required when `applicationType=Internship` |
+| POST   | `/api/apply`          | no             | multipart/form-data — creates an unpaid application and returns a Paystack authorization URL |
+| GET    | `/api/payment/verify/{reference}` | no | Verifies Paystack payment and marks the application as paid |
 | POST   | `/api/contact`        | no             | |
 | POST   | `/api/partner`        | no             | |
 | GET    | `/api/admin/stats`    | yes (admin)    | Bearer token in `Authorization` header |
@@ -84,11 +86,11 @@ and login/register will start hitting these real endpoints.
 
 ## The bot
 
-`app/bot/chat.py` is a stub, not a working chatbot — it's there so you
-have a router file and a marked spot in `app/main.py` (search for "BOT
-INTEGRATION") to wire your own bot into. Build your bot logic in that
-file, uncomment the two lines in `main.py`, and it'll be live at
-`POST /api/bot/chat`.
+The grounded RAG chatbot is available at `POST /api/bot/chat`. It accepts a
+JSON payload with `message` and `session_id`, retrieves relevant content from
+`data/faq.md` and other ingested sources, and returns a `reply`. Set
+`OPENAI_API_KEY` (or `API_KEY`), then run the ingestion script to populate the
+knowledge table before using the widget.
 
 ## Creating your first admin user
 

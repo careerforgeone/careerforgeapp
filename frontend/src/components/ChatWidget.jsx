@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 
-const API_BASE = 'https://careerforge-api-i1v3.onrender.com';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
 
 // One session ID per browser tab session — lets the backend pull recent
 // conversation history for this visitor. Persisted in sessionStorage so it
@@ -56,15 +56,15 @@ export default function ChatWidget() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionIdRef.current, message: trimmed }),
       });
-      if (!res.ok) throw new Error('bot request failed');
       const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'bot request failed');
       setMessages((m) => [...m, { who: 'bot', text: data.reply }]);
-    } catch {
+    } catch (requestError) {
       setMessages((m) => [
         ...m,
         {
           who: 'bot',
-          text: "Sorry, I'm having trouble reaching the assistant right now — try again in a moment, or use the Contact page and a real person will follow up.",
+          text: requestError.message || "Sorry, I'm having trouble reaching the assistant right now — try again in a moment, or use the Contact page and a real person will follow up.",
         },
       ]);
     } finally {

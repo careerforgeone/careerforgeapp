@@ -1,11 +1,14 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 
 class Settings:
-    # SQLite by default for easy local dev — set DATABASE_URL on Render to
-    # your Postgres connection string in production.
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./careerforge.db")
+    DATABASE_URL: str = os.getenv(
+        "DATABASE_URL", "postgresql+psycopg2://postgres:postgres@localhost:5432/careerforge"
+    )
 
     JWT_SECRET: str = os.getenv("JWT_SECRET", "dev-secret-change-this-in-production")
     JWT_ALGORITHM: str = "HS256"
@@ -16,6 +19,14 @@ class Settings:
     ALLOWED_ORIGINS: list[str] = [
         o.strip() for o in os.getenv("ALLOWED_ORIGINS", "*").split(",") if o.strip()
     ]
+
+    PAYSTACK_SECRET_KEY: str = os.getenv("PAYSTACK_SECRET_KEY", "")
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    APPLICATION_FEE_KOBO: int = int(os.getenv("APPLICATION_FEE_KOBO", "500000"))
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY", "")
+    OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
+    OPENAI_CHAT_MODEL: str = os.getenv("OPENAI_CHAT_MODEL", "openai/gpt-oss-20b:free")
+    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
 
     # Where uploaded résumés are saved, ON THIS SERVER — this is the
     # "backend has the path" folder referenced from Application.cv_path.

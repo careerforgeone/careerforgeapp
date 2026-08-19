@@ -1,5 +1,8 @@
+import json
 import uuid
 from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
@@ -14,10 +17,35 @@ ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB — matches the frontend's own check
 
 
+def paystack_request(path: str, payload: dict | None = None) -> dict:
+    if not settings.PAYSTACK_SECRET_KEY:
+        raise HTTPException(status_code=503, detail="Payment service is not configured.")
+
+    request = Request(
+        f"https://api.paystack.co/{path}",
+        data=json.dumps(payload).encode() if payload is not None else None,
+        headers={
+            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST" if payload is not None else "GET",
+    )
+    try:
+        with urlopen(request, timeout=15) as response:
+            return json.loads(response.read().decode())
+    except (HTTPError, URLError, TimeoutError) as exc:
+        raise HTTPException(status_code=502, detail="Unable to contact payment service.") from exc
+
+
 @router.post("/apply")
 async def apply(
     name: str = Form(...),
     email: str = Form(...),
+    state: str = Form(...),
+    country: str = Form(...),
+    countryCode: str = Form(...),
+    phoneNumber: str = Form(...),
+    hearAboutUs: str = Form(...),
     track: str = Form(...),
     applicationType: str = Form(...),
     portfolioUrl: str | None = Form(None),
@@ -55,6 +83,11 @@ async def apply(
     application = models.Application(
         name=name,
         email=email,
+        state=state,
+        country=country,
+        country_code=countryCode,
+        phone_number=phoneNumber,
+        hear_about_us=hearAboutUs,
         track=track,
         application_type=applicationType,
         portfolio_url=portfolioUrl,
@@ -65,4 +98,40 @@ async def apply(
     db.commit()
     db.refresh(application)
 
-    return {"status": "ok", "id": application.id, "cvPath": cv_path}
+    payment = paystack_request(
+        "transaction/initialize",
+        {
+            "email": email,
+            "amount": settings.APPLICATION_FEE_KOBO,
+            "reference": f"careerforge-{application.id}-{uuid.uuid4().hex[:12]}",
+            "callback_url": f"{settings.FRONTEND_URL}/payment-success",
+            "metadata": {"application_id": application.id},
+        },
+    )
+    if not payment.get("status") or not payment.get("data", {}).get("authorization_url"):
+        raise HTTPException(status_code=502, detail="Unable to initialize payment.")
+
+    application.payment_reference = payment["data"]["reference"]
+    db.commit()
+    return {
+        "status": "payment_required",
+        "id": application.id,
+        "reference": application.payment_reference,
+        "authorizationUrl": payment["data"]["authorization_url"],
+    }
+
+
+@router.get("/payment/verify/{reference}")
+def verify_payment(reference: str, db: Session = Depends(get_db)):
+    application = db.query(models.Application).filter_by(payment_reference=reference).first()
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found.")
+
+    payment = paystack_request(f"transaction/verify/{reference}")
+    paid = payment.get("status") and payment.get("data", {}).get("status") == "success"
+    if paid:
+        application.paid = True
+        application.status = "paid"
+        db.commit()
+
+    return {"paid": bool(paid), "applicationId": application.id}

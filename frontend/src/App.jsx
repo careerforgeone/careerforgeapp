@@ -6,6 +6,7 @@ import ScrollToTop from './components/ScrollToTop.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import Home from './pages/Home.jsx';
 import Apply from './pages/Apply.jsx';
+import PaymentSuccess from './pages/PaymentSuccess.jsx';
 import Login from './pages/Login.jsx';
 import CreateAccount from './pages/CreateAccount.jsx';
 import StudentDashboard from './pages/StudentDashboard.jsx';
@@ -19,6 +20,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/apply" element={<Apply />} />
+        <Route path="/payment-success" element={<PaymentSuccess />} />
         <Route path="/login" element={<Login />} />
         <Route path="/create-account" element={<CreateAccount />} />
         <Route

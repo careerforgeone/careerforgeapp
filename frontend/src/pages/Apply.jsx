@@ -1,16 +1,14 @@
 import { useState, useEffect } from 'react';
-import { useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
-//const API_BASE = 'https://careerforge-api-i1v3.onrender.com';
-const API_BASE = 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
 const TRACKS = ['Data', 'Product', 'Software', 'Design'];
 
 export default function Apply() {
   const [searchParams] = useSearchParams();
   const [applicationType, setApplicationType] = useState('Training');
   const [track, setTrack] = useState('Data');
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState('');
   const [validated, setValidated] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -41,7 +39,7 @@ export default function Apply() {
       }
     }
 
-    setError(false);
+    setError('');
     setSubmitting(true);
     // multipart/form-data so the actual résumé file can be uploaded — do NOT
     // set a Content-Type header manually, the browser sets the correct
@@ -53,11 +51,11 @@ export default function Apply() {
         method: 'POST',
         body: formData,
       });
-      if (!res.ok) throw new Error('failed');
-      setSubmitted(true);
-      form.reset();
-    } catch {
-      setError(true);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Unable to start payment.');
+      window.location.assign(data.authorizationUrl);
+    } catch (submissionError) {
+      setError(submissionError.message);
     } finally {
       setSubmitting(false);
     }
@@ -70,16 +68,7 @@ export default function Apply() {
           <div className="col-lg-6 col-md-8">
             <div className="card rounded-5 shadow-sm">
               <div className="card-body p-6">
-                {submitted ? (
-                  <div className="text-center py-6">
-                    <h1 className="card-title mb-3 h5">Application received.</h1>
-                    <p className="mb-4">Your application was submitted successfully. The team will be in touch soon.</p>
-                    <Link to="/" className="btn btn-outline-dark">
-                      Back to Home
-                    </Link>
-                  </div>
-                ) : (
-                  <>
+                <>
                     <h1 className="card-title mb-4 h5">Apply to CareerForge</h1>
 
                     <div className="btn-group w-100 mb-5" role="group" aria-label="Application type">
@@ -112,6 +101,43 @@ export default function Apply() {
                         <div className="invalid-feedback">Please enter a valid email.</div>
                       </div>
 
+                      <div className="row g-3 mb-3">
+                        <div className="col-md-6">
+                          <label htmlFor="country" className="form-label">Country</label>
+                          <select id="country" name="country" className="form-select" defaultValue="Nigeria" required>
+                            <option value="Nigeria">Nigeria</option>
+                            <option value="Ghana">Ghana</option>
+                            <option value="Kenya">Kenya</option>
+                            <option value="South Africa">South Africa</option>
+                            <option value="United Kingdom">United Kingdom</option>
+                            <option value="United States">United States</option>
+                            <option value="Other">Other</option>
+                          </select>
+                          <div className="invalid-feedback">Please select your country.</div>
+                        </div>
+                        <div className="col-md-6">
+                          <label htmlFor="state" className="form-label">State / Province</label>
+                          <input id="state" name="state" type="text" className="form-control" required />
+                          <div className="invalid-feedback">Please enter your state or province.</div>
+                        </div>
+                      </div>
+
+                      <div className="mb-3">
+                        <label htmlFor="phoneNumber" className="form-label">Phone number</label>
+                        <div className="input-group">
+                          <select id="countryCode" name="countryCode" className="form-select flex-grow-0" style={{ width: '125px' }} defaultValue="+234" aria-label="Country calling code" required>
+                            <option value="+234">+234 NG</option>
+                            <option value="+233">+233 GH</option>
+                            <option value="+254">+254 KE</option>
+                            <option value="+27">+27 ZA</option>
+                            <option value="+44">+44 UK</option>
+                            <option value="+1">+1 US/CA</option>
+                          </select>
+                          <input id="phoneNumber" name="phoneNumber" type="tel" className="form-control" placeholder="801 234 5678" required />
+                        </div>
+                        <div className="invalid-feedback">Please enter your phone number.</div>
+                      </div>
+
                       <div className="mb-3">
                         <label htmlFor="track" className="form-label">Track</label>
                         <select
@@ -128,15 +154,16 @@ export default function Apply() {
                       </div>
 
                       <div className="mb-3">
-                        <label htmlFor="password" className="form-label">Password</label>
-                        <input id="password" name="password" type="password" className="form-control" placeholder="Create a password" required minLength={6} />
-                        <div className="invalid-feedback">Please provide a password (min 6 characters).</div>
-                      </div>
-
-                      <div className="mb-3">
-                        <label htmlFor="confirmPassword" className="form-label">Confirm password</label>
-                        <input id="confirmPassword" name="confirmPassword" type="password" className="form-control" placeholder="Repeat password" required />
-                        <div className="invalid-feedback">Passwords must match.</div>
+                        <label htmlFor="hearAboutUs" className="form-label">How did you hear about us?</label>
+                        <select id="hearAboutUs" name="hearAboutUs" className="form-select" defaultValue="" required>
+                          <option value="" disabled>Select an option</option>
+                          <option value="Social media">Social media</option>
+                          <option value="Friend or colleague">Friend or colleague</option>
+                          <option value="Search engine">Search engine</option>
+                          <option value="Event or community">Event or community</option>
+                          <option value="Other">Other</option>
+                        </select>
+                        <div className="invalid-feedback">Please select an option.</div>
                       </div>
 
                       {applicationType === 'Internship' && (
@@ -182,9 +209,7 @@ export default function Apply() {
 
                       {error && (
                         <div className="alert alert-danger">
-                          {error === 'cv-too-large'
-                            ? 'Your CV file is larger than 5MB — please upload a smaller file.'
-                            : 'Something went wrong submitting the form — please try again or email hello@careerforge.example.'}
+                          {error === 'cv-too-large' ? 'Your CV file is larger than 5MB. Please upload a smaller file.' : error}
                         </div>
                       )}
 
@@ -192,12 +217,11 @@ export default function Apply() {
                         {submitting
                           ? 'Submitting…'
                           : applicationType === 'Internship'
-                          ? 'Submit Internship Application'
-                          : 'Apply Now'}
+                          ? 'Proceed to Payment'
+                          : 'Proceed to Payment'}
                       </button>
                     </form>
-                  </>
-                )}
+                </>
               </div>
             </div>
           </div>

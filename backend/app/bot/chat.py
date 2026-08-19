@@ -1,37 +1,119 @@
-"""
-Space reserved for the CareerForge chatbot.
+import json
+import re
 
-This is a stub — the actual bot logic isn't built here. Fill it in
-yourself, then wire it up:
+from fastapi import APIRouter, Depends, HTTPException
+from openai import OpenAI
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
-  1. Build your bot logic in this file (or import it from wherever you're
-     keeping it — a separate module, an LLM API call, whatever you're using).
-  2. In app/main.py, uncomment the two lines under the "BOT INTEGRATION"
-     comment block to mount this router at /api/bot/chat.
-  3. If you want the frontend's chat widget to actually call this endpoint
-     instead of its current client-side FAQ logic, update
-     src/components/ChatWidget.jsx in the frontend project to POST the
-     user's message here and render whatever `reply` comes back.
-
-The request/response shape below is just a starting point — change it to
-whatever your bot actually needs.
-"""
-
-from fastapi import APIRouter
-from pydantic import BaseModel
+from ..core.config import settings
+from ..database import get_db
+from ..models.chat import ChatMessage
+from ..models.knowledge import KnowledgeChunk
 
 router = APIRouter(prefix="/api/bot", tags=["bot"])
+HISTORY_TURNS = 6
+RETRIEVAL_K = 5
+
+SYSTEM_PROMPT = """You are the CareerForge assistant. Answer only using the CONTEXT below,
+which comes from official CareerForge handbook, curriculum, and FAQ content.
+If the answer is not in the context, say you are not sure and suggest contacting
+ the CareerForge team. Do not invent dates, prices, requirements, or programme details.
+Be concise, friendly, and helpful."""
 
 
 class ChatRequest(BaseModel):
-    message: str
+    session_id: str = Field(min_length=1, max_length=100)
+    message: str = Field(min_length=1, max_length=2000)
 
 
 class ChatResponse(BaseModel):
     reply: str
 
 
+def get_client() -> OpenAI:
+    if not settings.OPENAI_API_KEY:
+        raise HTTPException(status_code=503, detail="Chatbot API key is not configured.")
+    return OpenAI(api_key=settings.OPENAI_API_KEY, base_url=settings.OPENAI_BASE_URL)
+
+
+def embed(text: str) -> list[float] | None:
+    try:
+        result = get_client().embeddings.create(model=settings.EMBEDDING_MODEL, input=text)
+        return result.data[0].embedding
+    except Exception:
+        return None
+
+
+def parse_embedding(value: str | None) -> list[float] | None:
+    if not value:
+        return None
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError):
+        return None
+    if isinstance(parsed, list) and parsed and all(isinstance(item, (int, float)) for item in parsed):
+        return [float(item) for item in parsed]
+    return None
+
+
+def cosine_similarity(left: list[float] | None, right: list[float] | None) -> float:
+    if not left or not right or len(left) != len(right):
+        return 0.0
+    dot_product = sum(a * b for a, b in zip(left, right))
+    left_norm = sum(a * a for a in left) ** 0.5
+    right_norm = sum(b * b for b in right) ** 0.5
+    if left_norm == 0 or right_norm == 0:
+        return 0.0
+    return dot_product / (left_norm * right_norm)
+
+
+def retrieve_context(db: Session, query: str, limit: int = RETRIEVAL_K) -> str:
+    query_terms = set(re.findall(r"\w+", query.lower()))
+    query_embedding = embed(query)
+    scored_chunks = []
+    for chunk in db.query(KnowledgeChunk).all():
+        chunk_terms = set(re.findall(r"\w+", chunk.content.lower()))
+        keyword_score = len(query_terms & chunk_terms)
+        embedding_score = cosine_similarity(query_embedding, parse_embedding(chunk.embedding))
+        score = embedding_score if embedding_score > 0 else keyword_score
+        scored_chunks.append((score, chunk))
+
+    scored_chunks.sort(key=lambda item: item[0], reverse=True)
+    chunks = [chunk for _, chunk in scored_chunks[:limit]]
+    if not chunks:
+        return "(no matching context found)"
+    return "\n\n".join(f"[{chunk.source} — {chunk.section}]\n{chunk.content}" for chunk in chunks)
+
+
 @router.post("/chat", response_model=ChatResponse)
-def chat(payload: ChatRequest):
-    # TODO: replace this with your actual bot logic.
-    return {"reply": "The CareerForge bot isn't wired up yet."}
+def chat(payload: ChatRequest, db: Session = Depends(get_db)):
+    client = get_client()
+    db.add(ChatMessage(session_id=payload.session_id, role="user", content=payload.message))
+    db.commit()
+
+    context = retrieve_context(db, payload.message)
+    history = (
+        db.query(ChatMessage)
+        .filter(ChatMessage.session_id == payload.session_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(HISTORY_TURNS)
+        .all()[::-1]
+    )
+    messages = [{"role": "system", "content": f"{SYSTEM_PROMPT}\n\nCONTEXT:\n{context}"}]
+    messages.extend({"role": item.role, "content": item.content} for item in history)
+
+    try:
+        response = client.chat.completions.create(
+            model=settings.OPENAI_CHAT_MODEL,
+            messages=messages,
+            temperature=0.3,
+            max_tokens=400,
+        )
+        reply = response.choices[0].message.content or "I could not generate a response."
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="The chatbot provider is unavailable.") from exc
+
+    db.add(ChatMessage(session_id=payload.session_id, role="assistant", content=reply))
+    db.commit()
+    return ChatResponse(reply=reply)

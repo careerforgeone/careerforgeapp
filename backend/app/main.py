@@ -4,9 +4,8 @@ from fastapi.staticfiles import StaticFiles
 
 from .core.config import settings
 from .database import Base, engine
+from .bot import chat as bot_chat
 from .routers import admin, apply, auth, contact, partner
-
-# from .bot import chat as bot_chat  # <- see the BOT INTEGRATION block below
 
 Base.metadata.create_all(bind=engine)
 
@@ -29,16 +28,7 @@ app.include_router(apply.router)
 app.include_router(contact.router)
 app.include_router(partner.router)
 app.include_router(admin.router)
-
-# ============================================================
-# BOT INTEGRATION — space reserved for you to wire in your bot
-# ============================================================
-# A stub already exists at app/bot/chat.py. Once your bot logic is
-# ready there, uncomment these two lines to mount it at /api/bot/chat:
-#
-# from .bot import chat as bot_chat
-# app.include_router(bot_chat.router)
-# ============================================================
+app.include_router(bot_chat.router)
 
 
 @app.get("/")

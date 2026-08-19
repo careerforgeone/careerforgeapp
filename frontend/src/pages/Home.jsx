@@ -18,7 +18,7 @@ import buildStageIcon from '../assets/images/stages/build-stage.svg';
 import reviewStageIcon from '../assets/images/stages/review-stage.svg';
 import coachStageIcon from '../assets/images/stages/coach-stage.svg';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
 
 const stages = [
   { num: '01', name: 'Train', tag: 'Structured Training', icon: trainStageIcon,

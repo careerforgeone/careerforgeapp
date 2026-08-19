@@ -9,10 +9,17 @@ class ApplicationOut(BaseModel):
     id: int
     name: str
     email: str
+    state: str
+    country: str
+    country_code: str
+    phone_number: str
+    hear_about_us: str
     track: str
     application_type: str
     portfolio_url: str | None = None
     linkedin_url: str | None = None
     cv_path: str | None = None
+    payment_reference: str | None = None
+    paid: bool
     status: str
     created_at: datetime
