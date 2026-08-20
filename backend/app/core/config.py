@@ -22,7 +22,9 @@ class Settings:
 
     PAYSTACK_SECRET_KEY: str = os.getenv("PAYSTACK_SECRET_KEY", "")
     FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:3000")
-    APPLICATION_FEE_KOBO: int = int(os.getenv("APPLICATION_FEE_KOBO", "500000"))
+    APPLICATION_FEE_KOBO: int = int(
+        os.getenv("APPLICATION_FEE_KOBO", str(int(os.getenv("APPLICATION_FEE", "35000")) * 100))
+    )
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY", "")
     OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
     OPENAI_CHAT_MODEL: str = os.getenv("OPENAI_CHAT_MODEL", "openai/gpt-oss-20b:free")

@@ -24,7 +24,7 @@ services:
       - key: PAYSTACK_SECRET_KEY
         sync: false
       - key: APPLICATION_FEE_KOBO
-        value: "500000"
+        value: "3500000"
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_BASE_URL

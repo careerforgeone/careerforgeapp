@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/api", tags=["apply"])
 
 ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB — matches the frontend's own check
+PAYMENT_AMOUNT_KOBO = 3_500_000
 
 
 def paystack_request(path: str, payload: dict | None = None) -> dict:
@@ -33,7 +35,14 @@ def paystack_request(path: str, payload: dict | None = None) -> dict:
     try:
         with urlopen(request, timeout=15) as response:
             return json.loads(response.read().decode())
-    except (HTTPError, URLError, TimeoutError) as exc:
+    except HTTPError as exc:
+        if exc.code in (401, 403):
+            raise HTTPException(
+                status_code=502,
+                detail="Paystack rejected the secret key. Check that it is an active Paystack secret key.",
+            ) from exc
+        raise HTTPException(status_code=502, detail="Paystack returned an error.") from exc
+    except (URLError, TimeoutError) as exc:
         raise HTTPException(status_code=502, detail="Unable to contact payment service.") from exc
 
 
@@ -98,11 +107,27 @@ async def apply(
     db.commit()
     db.refresh(application)
 
+    return {
+        "success": True,
+        "message": "Application submitted successfully",
+        "application_id": application.id,
+        "payment_status": application.payment_status,
+        "payment_amount": PAYMENT_AMOUNT_KOBO,
+    }
+
+
+@router.post("/payment/initialize/{application_id}")
+@router.post("/applications/{application_id}/initialize-payment")
+def initialize_payment(application_id: int, db: Session = Depends(get_db)):
+    application = db.query(models.Application).filter_by(id=application_id).first()
+    if application is None:
+        raise HTTPException(status_code=404, detail="Application not found.")
+
     payment = paystack_request(
         "transaction/initialize",
         {
-            "email": email,
-            "amount": settings.APPLICATION_FEE_KOBO,
+            "email": application.email,
+            "amount": PAYMENT_AMOUNT_KOBO,
             "reference": f"careerforge-{application.id}-{uuid.uuid4().hex[:12]}",
             "callback_url": f"{settings.FRONTEND_URL}/payment-success",
             "metadata": {"application_id": application.id},
@@ -112,10 +137,11 @@ async def apply(
         raise HTTPException(status_code=502, detail="Unable to initialize payment.")
 
     application.payment_reference = payment["data"]["reference"]
+    application.payment_amount = payment["data"].get("amount", PAYMENT_AMOUNT_KOBO)
     db.commit()
     return {
         "status": "payment_required",
-        "id": application.id,
+        "application_id": application.id,
         "reference": application.payment_reference,
         "authorizationUrl": payment["data"]["authorization_url"],
     }
@@ -130,8 +156,9 @@ def verify_payment(reference: str, db: Session = Depends(get_db)):
     payment = paystack_request(f"transaction/verify/{reference}")
     paid = payment.get("status") and payment.get("data", {}).get("status") == "success"
     if paid:
-        application.paid = True
+        application.payment_status = True
+        application.payment_paid_at = datetime.now(timezone.utc)
         application.status = "paid"
         db.commit()
 
-    return {"paid": bool(paid), "applicationId": application.id}
+    return {"paymentStatus": bool(paid), "applicationId": application.id}

@@ -3,11 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .core.config import settings
-from .database import Base, engine
+from .database import Base, engine, ensure_application_payment_columns
 from .bot import chat as bot_chat
 from .routers import admin, apply, auth, contact, partner
 
 Base.metadata.create_all(bind=engine)
+ensure_application_payment_columns()
 
 app = FastAPI(title="CareerForge API")
 

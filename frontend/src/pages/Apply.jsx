@@ -11,6 +11,8 @@ export default function Apply() {
   const [error, setError] = useState('');
   const [validated, setValidated] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submittedApplication, setSubmittedApplication] = useState(null);
+  const [startingPayment, setStartingPayment] = useState(false);
 
   useEffect(() => {
     const pre = searchParams.get('track');
@@ -53,11 +55,28 @@ export default function Apply() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Unable to start payment.');
-      window.location.assign(data.authorizationUrl);
+      setSubmittedApplication(data);
     } catch (submissionError) {
       setError(submissionError.message);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function proceedToPayment() {
+    setError('');
+    setStartingPayment(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/payment/initialize/${submittedApplication.application_id}`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Unable to start payment.');
+      window.location.assign(data.authorizationUrl);
+    } catch (paymentError) {
+      setError(paymentError.message);
+    } finally {
+      setStartingPayment(false);
     }
   }
 
@@ -68,7 +87,25 @@ export default function Apply() {
           <div className="col-lg-6 col-md-8">
             <div className="card rounded-5 shadow-sm">
               <div className="card-body p-6">
-                <>
+                {submittedApplication ? (
+                  <div className="text-center py-4">
+                    <h1 className="h5 mb-3">Application submitted successfully.</h1>
+                    <p className="mb-2">Application ID: <strong>{submittedApplication.application_id}</strong></p>
+                    <p className="mb-4">
+                      Payment required: <strong>₦{(submittedApplication.payment_amount / 100).toLocaleString('en-NG')}</strong>
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={proceedToPayment}
+                      disabled={startingPayment}
+                    >
+                      {startingPayment ? 'Opening Payment…' : 'Proceed to Payment'}
+                    </button>
+                    {error && <div className="alert alert-danger mt-3 mb-0">{error}</div>}
+                  </div>
+                ) : (
+                  <>
                     <h1 className="card-title mb-4 h5">Apply to CareerForge</h1>
 
                     <div className="btn-group w-100 mb-5" role="group" aria-label="Application type">
@@ -221,7 +258,8 @@ export default function Apply() {
                           : 'Proceed to Payment'}
                       </button>
                     </form>
-                </>
+                  </>
+                )}
               </div>
             </div>
           </div>

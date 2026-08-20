@@ -17,7 +17,7 @@ export default function PaymentSuccess() {
     fetch(`${API_BASE}/api/payment/verify/${encodeURIComponent(reference)}`)
       .then(async (response) => {
         const data = await response.json();
-        if (!response.ok || !data.paid) throw new Error('Payment was not completed.');
+        if (!response.ok || !data.paymentStatus) throw new Error('Payment was not completed.');
         setState('success');
       })
       .catch(() => setState('failed'));

@@ -20,6 +20,8 @@ class ApplicationOut(BaseModel):
     linkedin_url: str | None = None
     cv_path: str | None = None
     payment_reference: str | None = None
-    paid: bool
+    payment_status: bool
+    payment_amount: int | None = None
+    payment_paid_at: datetime | None = None
     status: str
     created_at: datetime
