@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from .. import models
 from ..core.config import settings
 from ..database import get_db
+import requests
 
 router = APIRouter(prefix="/api", tags=["apply"])
 
@@ -38,7 +39,7 @@ def paystack_request(path: str, payload: dict | None = None) -> dict:
         method="POST" if payload is not None else "GET",
     )
     try:
-        with urlopen(request, timeout=15) as response:
+        with urlopen(request, timeout=60) as response:
             return json.loads(response.read().decode())
     except HTTPError as exc:
         if exc.code in (401, 403):
