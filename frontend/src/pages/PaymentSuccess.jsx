@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 // Only shown once payment is verified as successful — see the guard below
 // the receipt. Configure this per-deployment rather than hard-coding it.
 const CLASSROOM_URL = import.meta.env.VITE_GOOGLE_CLASSROOM_URL;
