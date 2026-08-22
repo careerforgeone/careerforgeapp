@@ -224,12 +224,25 @@ def _confirm_payment(application: models.Application, reference: str, db: Sessio
     # Belt-and-braces: confirm this transaction really is for this exact
     # application and the exact fee, not just that *some* payment succeeded.
     metadata_app_id = (data.get("metadata") or {}).get("application_id")
-    amount_matches = data.get("amount") == settings.APPLICATION_FEE_KOBO
+    try:
+        amount_matches = int(data.get("amount")) == settings.APPLICATION_FEE_KOBO
+    except (TypeError, ValueError):
+        amount_matches = False
     reference_matches = data.get("reference") == reference
     metadata_matches = metadata_app_id is None or int(metadata_app_id) == application.id
 
     if not (amount_matches and reference_matches and metadata_matches):
-        application.status = "payment_verification_mismatch"
+        # Record exactly which check(s) failed and with what values, instead
+        # of a blanket "mismatch" — this is what actually gets debugged from,
+        # since the three checks fail for very different reasons.
+        reasons = []
+        if not amount_matches:
+            reasons.append(f"amount {data.get('amount')!r} != expected {settings.APPLICATION_FEE_KOBO!r}")
+        if not reference_matches:
+            reasons.append(f"reference {data.get('reference')!r} != expected {reference!r}")
+        if not metadata_matches:
+            reasons.append(f"metadata.application_id {metadata_app_id!r} != expected {application.id!r}")
+        application.status = "payment_verification_mismatch: " + "; ".join(reasons)
         db.commit()
         return "mismatch"
 

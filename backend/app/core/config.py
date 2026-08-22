@@ -27,8 +27,8 @@ class Settings:
     )
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY", "")
     OPENAI_BASE_URL: str = os.getenv("OPENAI_BASE_URL", "https://openrouter.ai/api/v1")
-    OPENAI_CHAT_MODEL: str = os.getenv("OPENAI_CHAT_MODEL", "openai/gpt-oss-20b:free")
-    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
+    OPENAI_CHAT_MODEL: str = os.getenv("OPENAI_CHAT_MODEL", "openai/gpt-oss-20b")
+    EMBEDDING_MODEL: str = os.getenv("EMBEDDING_MODEL", "openai/text-embedding-3-small")
 
     # Where uploaded résumés are saved, ON THIS SERVER — this is the
     # "backend has the path" folder referenced from Application.cv_path.

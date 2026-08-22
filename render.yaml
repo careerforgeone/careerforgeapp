@@ -42,7 +42,7 @@ services:
         value: "https://openrouter.ai/api/v1"
 
       - key: OPENAI_CHAT_MODEL
-        value: "openai/gpt-oss-20b:free"
+        value: "openai/gpt-oss-20b"
 
       - key: EMBEDDING_MODEL
-        value: "text-embedding-3-small"
+        value: "openai/text-embedding-3-small"
