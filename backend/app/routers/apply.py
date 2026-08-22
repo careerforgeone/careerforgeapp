@@ -4,16 +4,14 @@ import json
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import Request as UrlRequest, urlopen
 
+import requests
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
 
 from .. import models
 from ..core.config import settings
 from ..database import get_db
-import requests
 
 router = APIRouter(prefix="/api", tags=["apply"])
 
@@ -24,32 +22,67 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB — matches the frontend's own check
 # render.yaml's APPLICATION_FEE_KOBO env var actually controls what gets
 # charged. Never read an amount from the request — see initialize_payment().
 
+PAYSTACK_BASE_URL = "https://api.paystack.co"
+
 
 def paystack_request(path: str, payload: dict | None = None) -> dict:
+    """Call the Paystack API and return its parsed JSON body.
+
+    Uses `requests` with an explicit, descriptive User-Agent. This matters:
+    api.paystack.co sits behind Cloudflare, and Cloudflare's Browser
+    Integrity Check blocks requests whose User-Agent looks like a bot —
+    which includes the *default* User-Agent sent by both `urllib`
+    ("Python-urllib/3.x") and bare `requests` ("python-requests/x.y").
+    That block happens at Cloudflare's edge, before Paystack's own servers
+    ever see the request — so it can produce a 403 that has nothing to do
+    with your secret key at all (Cloudflare's "error 1010" is exactly
+    this: "banned your access based on your browser's signature").
+    """
     if not settings.PAYSTACK_SECRET_KEY:
         raise HTTPException(status_code=503, detail="Payment service is not configured.")
 
-    request = UrlRequest(
-        f"https://api.paystack.co/{path}",
-        data=json.dumps(payload).encode() if payload is not None else None,
-        headers={
-            "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
-            "Content-Type": "application/json",
-        },
-        method="POST" if payload is not None else "GET",
-    )
+    method = "POST" if payload is not None else "GET"
+
     try:
-        with urlopen(request, timeout=60) as response:
-            return json.loads(response.read().decode())
-    except HTTPError as exc:
-        if exc.code in (401, 403):
-            raise HTTPException(
-                status_code=502,
-                detail="Paystack rejected the secret key. Check that it is an active Paystack secret key.",
-            ) from exc
-        raise HTTPException(status_code=502, detail="Paystack returned an error.") from exc
-    except (URLError, TimeoutError) as exc:
+        response = requests.request(
+            method,
+            f"{PAYSTACK_BASE_URL}/{path}",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {settings.PAYSTACK_SECRET_KEY}",
+                "User-Agent": "CareerForge-Backend/1.0 (+https://careerforge.example; payments integration)",
+            },
+            timeout=15,
+        )
+    except requests.RequestException as exc:
         raise HTTPException(status_code=502, detail="Unable to contact payment service.") from exc
+
+    try:
+        data = response.json()
+    except ValueError:
+        # The response isn't JSON at all, which means it almost certainly
+        # didn't come from Paystack's own application — most likely an
+        # edge/proxy block page (e.g. Cloudflare) intercepted the request
+        # first. Surface that plainly instead of guessing "bad key".
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"Paystack returned a non-JSON response (HTTP {response.status_code}). "
+                "This usually means a network/CDN layer (e.g. Cloudflare) blocked the "
+                "request before it reached Paystack — not that the secret key is invalid. "
+                f"Response started with: {response.text[:200]!r}"
+            ),
+        )
+
+    if not response.ok:
+        # Show Paystack's own message instead of assuming what went wrong.
+        message = data.get("message", "Unknown error")
+        raise HTTPException(
+            status_code=502,
+            detail=f"Paystack rejected the request (HTTP {response.status_code}): {message}",
+        )
+
+    return data
 
 
 @router.post("/apply")
