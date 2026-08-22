@@ -112,7 +112,25 @@ def chat(payload: ChatRequest, db: Session = Depends(get_db)):
         )
         reply = response.choices[0].message.content or "I could not generate a response."
     except Exception as exc:
-        raise HTTPException(status_code=502, detail="The chatbot provider is unavailable.") from exc
+        # Surface what actually went wrong instead of a fixed guess — an
+        # invalid key, a rate limit, and a bad model name all look
+        # identical to the caller unless the real message gets through.
+        detail = str(exc)
+        status_code = getattr(exc, "status_code", None) or getattr(getattr(exc, "response", None), "status_code", None)
+        if status_code == 429:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Chatbot provider rate limit hit ({settings.OPENAI_CHAT_MODEL}): {detail}",
+            ) from exc
+        if status_code in (401, 403):
+            raise HTTPException(
+                status_code=502,
+                detail=f"Chatbot provider rejected the request (auth): {detail}",
+            ) from exc
+        raise HTTPException(
+            status_code=502,
+            detail=f"Chatbot provider error ({settings.OPENAI_CHAT_MODEL}): {detail}",
+        ) from exc
 
     db.add(ChatMessage(session_id=payload.session_id, role="assistant", content=reply))
     db.commit()
