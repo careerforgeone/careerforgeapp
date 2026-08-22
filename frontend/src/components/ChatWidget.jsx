@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'https://careerforge-new-api.onrender.com';
 
 // One session ID per browser tab session — lets the backend pull recent
 // conversation history for this visitor. Persisted in sessionStorage so it
