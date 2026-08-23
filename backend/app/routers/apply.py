@@ -225,7 +225,12 @@ def _confirm_payment(application: models.Application, reference: str, db: Sessio
     # application and the exact fee, not just that *some* payment succeeded.
     metadata_app_id = (data.get("metadata") or {}).get("application_id")
     try:
-        amount_matches = int(data.get("amount")) == settings.APPLICATION_FEE_KOBO
+        # Paystack adds its own processing fee on top of the requested amount
+        # when the dashboard is set to pass fees to the customer — so the
+        # verified amount can legitimately be *more* than what we asked for,
+        # never less. Guard against being paid too little, not against
+        # Paystack's fee making the total not match exactly.
+        amount_matches = int(data.get("amount")) >= settings.APPLICATION_FEE_KOBO
     except (TypeError, ValueError):
         amount_matches = False
     reference_matches = data.get("reference") == reference
