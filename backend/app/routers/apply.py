@@ -101,6 +101,48 @@ async def apply(
     cv: UploadFile | None = File(None),
     db: Session = Depends(get_db),
 ):
+    # Duplicate check happens before any file I/O, so a reject or a
+    # redirect-to-payment never leaves an orphaned CV upload on disk.
+    # Scoped by email + track — the same person can hold separate
+    # applications for different tracks, just not two for the same one.
+    existing_paid = (
+        db.query(models.Application)
+        .filter(
+            models.Application.email == email,
+            models.Application.track == track,
+            models.Application.payment_status.is_(True),
+        )
+        .first()
+    )
+    if existing_paid is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An application for this email and track has already been submitted and paid for.",
+        )
+
+    existing_unpaid = (
+        db.query(models.Application)
+        .filter(
+            models.Application.email == email,
+            models.Application.track == track,
+            models.Application.payment_status.is_(False),
+        )
+        .order_by(models.Application.id.desc())
+        .first()
+    )
+    if existing_unpaid is not None:
+        # Don't create a duplicate row for someone who already started —
+        # send them straight back to payment for the one they have. This
+        # reuses the exact response shape a fresh submission returns, so
+        # the frontend's existing "Proceed to Payment" flow needs no change.
+        return {
+            "success": True,
+            "message": "You already have an application in progress — continue to payment.",
+            "application_id": existing_unpaid.id,
+            "payment_status": existing_unpaid.payment_status,
+            "payment_amount": settings.APPLICATION_FEE_KOBO,
+        }
+
     cv_path = None
 
     if applicationType == "Internship":
