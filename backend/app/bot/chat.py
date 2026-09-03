@@ -15,9 +15,9 @@ router = APIRouter(prefix="/api/bot", tags=["bot"])
 HISTORY_TURNS = 6
 RETRIEVAL_K = 5
 
-SYSTEM_PROMPT = """You are the TechieStart Assistant.
+SYSTEM_PROMPT = """You are the CareerForge Assistant.
 
-Your job is to help users with questions about TechieStart while also
+Your job is to help users with questions about CareerForge while also
 maintaining a friendly, natural conversation.
 
 RULES:
